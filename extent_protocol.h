@@ -5,24 +5,35 @@
 
 #include "rpc.h"
 
-class extent_protocol {
- public:
+class extent_protocol
+{
+public:
   typedef int status;
   typedef unsigned long long extentid_t;
-  enum xxstatus { OK, RPCERR, NOENT, IOERR };
-  enum rpc_numbers {
+  enum xxstatus
+  {
+    OK,
+    RPCERR,
+    NOENT,
+    IOERR
+  };
+  enum rpc_numbers
+  {
     put = 0x6001,
     get,
     getattr,
     remove
   };
 
-  enum types {
+  enum types
+  {
     T_DIR = 1,
-    T_FILE
+    T_FILE,
+    T_SYMBOLIC_LINK
   };
 
-  struct attr {
+  struct attr
+  {
     uint32_t type;
     unsigned int atime;
     unsigned int mtime;
@@ -53,4 +64,4 @@ operator<<(marshall &m, extent_protocol::attr a)
   return m;
 }
 
-#endif 
+#endif
