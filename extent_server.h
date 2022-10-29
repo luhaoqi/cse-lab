@@ -32,6 +32,7 @@ class extent_server {
   int remove(extent_protocol::extentid_t id, int &);
 
   // Your code here for lab2A: add logging APIs
+  void redo_log(const chfs_command &cmd);
 };
 
 #endif

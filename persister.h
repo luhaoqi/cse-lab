@@ -82,14 +82,14 @@ class persister {
   void restore_logdata();
   void restore_checkpoint();
 
+  // restored log data
+  std::vector<command> log_entries;
+
  private:
   std::mutex mtx;
   std::string file_dir;
   std::string file_path_checkpoint;
   std::string file_path_logfile;
-
-  // restored log data
-  std::vector<command> log_entries;
 };
 
 template <typename command>
@@ -108,15 +108,31 @@ persister<command>::~persister() {
 template <typename command>
 void persister<command>::append_log(const command& log) {
   // Your code here for lab2A
-  std::cout << "append log" << std::endl;
-  std::ofstream out(file_path_logfile, std::ofstream::app);
+  log_entries.push_back(log);
+  std::ofstream out(file_path_logfile,
+                    std::ofstream::app | std::ofstream::binary);
   out.write(reinterpret_cast<const char*>(&log.type), sizeof(log.type));
   out.write(reinterpret_cast<const char*>(&log.txid), sizeof(log.txid));
   switch (log.type) {
-    case chfs_command::CMD_BEGIN:
-    case chfs_command::CMD_COMMIT:
-      break;
     case chfs_command::CMD_CREATE:
+      out.write(reinterpret_cast<const char*>(&log.inum), sizeof(log.inum));
+      out.write(reinterpret_cast<const char*>(&log.create_type),
+                sizeof(log.create_type));
+      break;
+    case chfs_command::CMD_PUT:
+      out.write(reinterpret_cast<const char*>(&log.inum), sizeof(log.inum));
+      out.write(reinterpret_cast<const char*>(&log.size_old),
+                sizeof(log.size_old));
+      out.write(reinterpret_cast<const char*>(&log.size_new),
+                sizeof(log.size_new));
+      out.write(reinterpret_cast<const char*>(log.s_old.c_str()), log.size_old);
+      out.write(reinterpret_cast<const char*>(log.s_new.c_str()), log.size_new);
+      break;
+    case chfs_command::CMD_REMOVE:
+      out.write(reinterpret_cast<const char*>(&log.inum), sizeof(log.inum));
+      out.write(reinterpret_cast<const char*>(&log.size_old),
+                sizeof(log.size_old));
+      out.write(reinterpret_cast<const char*>(log.s_old.c_str()), log.size_old);
       break;
     default:
       break;
@@ -129,9 +145,62 @@ void persister<command>::checkpoint() {
 }
 
 template <typename command>
-void persister<command>::restore_logdata(){
-    // Your code here for lab2A
+void persister<command>::restore_logdata() {
+  // Your code here for lab2A
+  std::ifstream in(file_path_logfile, std::ios::binary);
+  if (in.is_open()) {
+    chfs_command::cmd_type type;
+    in.read(reinterpret_cast<char*>(&type), sizeof(type));
+    txid_t txid;
+    in.read(reinterpret_cast<char*>(&txid), sizeof(txid));
+    std::cout << "restore logdada: type=" << type << " txid=" << txid
+              << std::endl;
 
+    chfs_command cmd(type, txid);
+
+    uint32_t create_type, inum;
+    uint32_t size_old, size_new;
+    char *s_old, *s_new;
+    switch (type) {
+      case chfs_command::CMD_CREATE:
+        in.read(reinterpret_cast<char*>(&inum), sizeof(inum));
+        cmd.inum = inum;
+        in.read(reinterpret_cast<char*>(&create_type), sizeof(create_type));
+        cmd.create_type = create_type;
+        break;
+      case chfs_command::CMD_PUT:
+        in.read(reinterpret_cast<char*>(&inum), sizeof(inum));
+        cmd.inum = inum;
+        in.read(reinterpret_cast<char*>(&size_old), sizeof(size_old));
+        in.read(reinterpret_cast<char*>(&size_new), sizeof(size_new));
+        cmd.size_old = size_old;
+        cmd.size_new = size_new;
+        s_old = new char[size_old + 1];
+        s_new = new char[size_new + 1];
+        in.read(reinterpret_cast<char*>(&s_old), size_old);
+        in.read(reinterpret_cast<char*>(&s_new), size_new);
+        s_old[size_old] = s_new[size_new] = 0;
+        cmd.s_old = s_old;
+        cmd.s_new = s_new;
+        delete s_old;
+        delete s_new;
+        break;
+      case chfs_command::CMD_REMOVE:
+        in.read(reinterpret_cast<char*>(&inum), sizeof(inum));
+        cmd.inum = inum;
+        in.read(reinterpret_cast<char*>(&size_old), sizeof(size_old));
+        cmd.size_old = size_old;
+        s_old = new char[size_old + 1];
+        in.read(reinterpret_cast<char*>(&s_old), size_old);
+        s_old[size_old] = 0;
+        cmd.s_old = s_old;
+        delete s_old;
+        break;
+      default:
+        break;
+    }
+    log_entries.push_back(cmd);
+  }
 };
 
 template <typename command>
