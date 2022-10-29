@@ -3,10 +3,10 @@
 #ifndef extent_server_h
 #define extent_server_h
 
-#include <string>
 #include <map>
-#include "extent_protocol.h"
+#include <string>
 
+#include "extent_protocol.h"
 #include "inode_manager.h"
 #include "persister.h"
 
@@ -34,11 +34,4 @@ class extent_server {
   // Your code here for lab2A: add logging APIs
 };
 
-#endif 
-
-
-
-
-
-
-
+#endif
