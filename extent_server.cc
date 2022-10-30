@@ -33,6 +33,7 @@ extent_server::extent_server() {
 }
 
 void extent_server::redo_log(const chfs_command &cmd) {
+  std::cout << "redo log: type=" << cmd.type << std::endl;
   extent_protocol::extentid_t inum = cmd.inum;
   int x;
   switch (cmd.type) {
