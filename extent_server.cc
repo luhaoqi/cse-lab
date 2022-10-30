@@ -27,20 +27,37 @@ extent_server::extent_server() {
   im = new inode_manager();
   _persister = new chfs_persister("log");  // DO NOT change the dir name here
 
+  // inode1初始化的时候加载 需要预先设定
+  inode_map[1] = 1;
   // Your code here for Lab2A: recover data on startup
   _persister->restore_logdata();
-  for (const auto &x : _persister->log_entries) {
-    redo_log(x);
+
+  printf("log size:%ld\n", _persister->log_entries.size());
+
+  int num = 0;
+  size_t sz = _persister->log_entries.size();
+  for (size_t i = 0; i < sz; i++) {
+    chfs_command *log = _persister->log_entries[i];
+    ++num;
+    // if (i % 10 == 0) printf("REDO LOG---%d----\n", num);
+    // // assert(_persister->log_entries[i] <= 0xFFFFFFFFFFFF);
+    // printf("log address(x): %p\n", log);
+    // log->print();
+    redo_log(log);
+    // printf("REDO     ----------   END\n");
   }
 }
 
 void extent_server::redo_log(chfs_command *log) {
+  // printf("log address(log): %p\n", log);
   cmd_type cmdTy = log->cmdTy;
+  // printf("%d\n", cmdTy);
   switch (cmdTy) {
     case CMD_BEGIN:
     case CMD_COMMIT:
       break;
     case CMD_CREATE: {
+      // printf("CREATE-------\n");
       auto p = dynamic_cast<chfs_command_create *>(log);
       assert(p != nullptr);
       extent_protocol::extentid_t inum;
@@ -48,12 +65,15 @@ void extent_server::redo_log(chfs_command *log) {
       inode_map[p->inum] = inum;
     } break;
     case CMD_PUT: {
+      // printf("PUT-------\n");
       auto p = dynamic_cast<chfs_command_put *>(log);
       assert(p != nullptr);
       int r;
+      assert(p->str.size() == p->size);
       put(inode_map[p->inum], p->str, r);
     } break;
     case CMD_REMOVE: {
+      // printf("REMOVE-------\n");
       auto p = dynamic_cast<chfs_command_remove *>(log);
       assert(p != nullptr);
       int r;
@@ -67,7 +87,8 @@ void extent_server::redo_log(chfs_command *log) {
 
 int extent_server::create(uint32_t type, extent_protocol::extentid_t &id) {
   // alloc a new inode and return inum
-  printf("extent_server: create inode\n");
+  // printf("extent_server: create inode\n");
+  // printf("[in create] %u\n", type);
   id = im->alloc_inode(type);
 
   // Lab2A: add create log into persist
@@ -84,8 +105,9 @@ int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &) {
 
   const char *cbuf = buf.c_str();
   int size = buf.size();
+  // printf("in [put] before write_file\n");
   im->write_file(id, cbuf, size);
-
+  // printf("in [put] after write_file\n");
   // Lab2A: add create log into persist
   // append log
   txid_t txid = txid_manager.get_next_txid();

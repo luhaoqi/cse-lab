@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iostream>
 #include <mutex>
+#include <vector>
 
 #include "extent_server.h"
 #include "rpc.h"
@@ -47,6 +48,7 @@ class chfs_command {
   chfs_command(txid_t id, cmd_type cmd) : cmdTy(cmd), txid(id) {}
   virtual void save_log(std::ofstream& out) = 0;
   virtual void read_log(std::ifstream& in) = 0;
+  virtual void print() = 0;
 };
 
 class chfs_command_begin : public chfs_command {
@@ -62,6 +64,8 @@ class chfs_command_begin : public chfs_command {
   void read_log(std::ifstream& in) {
     in.read(reinterpret_cast<char*>(&txid), sizeof(txid));
   }
+
+  void print() {}
 };
 
 class chfs_command_commit : public chfs_command {
@@ -77,6 +81,8 @@ class chfs_command_commit : public chfs_command {
   void read_log(std::ifstream& in) {
     in.read(reinterpret_cast<char*>(&txid), sizeof(txid));
   }
+
+  void print() {}
 };
 
 class chfs_command_create : public chfs_command {
@@ -99,6 +105,9 @@ class chfs_command_create : public chfs_command {
     in.read(reinterpret_cast<char*>(&inum), sizeof(inum));
     in.read(reinterpret_cast<char*>(&type), sizeof(type));
   }
+  void print() {
+    printf("create read_log txid=%llu inum=%u type=%u\n", txid, inum, type);
+  }
 };
 
 class chfs_command_put : public chfs_command {
@@ -115,8 +124,9 @@ class chfs_command_put : public chfs_command {
     out.write(reinterpret_cast<char*>(&inum), sizeof(inum));
     out.write(reinterpret_cast<char*>(&size), sizeof(size));
     assert(size == str.size());
-    const char* ch = str.c_str();
-    out.write(ch, size);
+    // for (int i = 0; i < size; i++) assert(str[i] != 0);
+    out.write(str.c_str(), size);
+    // printf("save_log put  txid=%d inum =%d size=%d\n", txid, inum, size);
   }
 
   void read_log(std::ifstream& in) {
@@ -127,7 +137,14 @@ class chfs_command_put : public chfs_command {
     in.read(ch, size);
     ch[size] = 0;
     str = ch;
+    if (str.size() != size) std::cout << str.size() << " " << size << std::endl;
+    // assert(str.size() == size);
     delete ch;
+  }
+  void print() {
+    printf("put  txid=%lld inum =%d size=%d\n", txid, inum, size);
+    // std::cout << str << std::endl;
+    // std::cout.flush();
   }
 };
 
@@ -150,6 +167,8 @@ class chfs_command_remove : public chfs_command {
     in.read(reinterpret_cast<char*>(&txid), sizeof(txid));
     in.read(reinterpret_cast<char*>(&inum), sizeof(inum));
   }
+
+  void print() {}
 };
 // 定义一个指针类型
 typedef chfs_command* chfs_command_ptr;
@@ -178,11 +197,12 @@ class chfs_persister {
   }
   ~chfs_persister() {
     // Your code here for lab2A
+    // for (auto x : log_entries) delete x;
   }
 
   // persist data into solid binary file
   // You may modify parameters in these functions
-  void append_log(chfs_command_ptr log) {
+  void append_log(chfs_command* log) {
     // Your code here for lab2A
     log_entries.push_back(log);
 
@@ -230,8 +250,12 @@ class chfs_persister {
           break;
       }
       log->read_log(in);
+      // log->print();
       log_entries.push_back(log);
+      // std::cout << "[in restore log] log address:" << log << std::endl;
+      // printf("log size:%ld\n", log_entries.size());
     }
+    in.close();
   }
   void restore_checkpoint() {
     // Your code here for lab2A

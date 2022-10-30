@@ -4,8 +4,12 @@
 #define inode_h
 
 #include <stdint.h>
-#include "extent_protocol.h"
+
 #include <map>
+
+#include "extent_protocol.h"
+
+#define TEST
 
 #define DISK_SIZE 1024 * 1024 * 16
 #define BLOCK_SIZE 512
@@ -15,12 +19,11 @@ typedef uint32_t blockid_t;
 
 // disk layer -----------------------------------------
 
-class disk
-{
-private:
+class disk {
+ private:
   unsigned char blocks[BLOCK_NUM][BLOCK_SIZE];
 
-public:
+ public:
   disk();
   void read_block(uint32_t id, char *buf);
   void write_block(uint32_t id, const char *buf);
@@ -28,20 +31,18 @@ public:
 
 // block layer -----------------------------------------
 
-typedef struct superblock
-{
+typedef struct superblock {
   uint32_t size;
   uint32_t nblocks;
   uint32_t ninodes;
 } superblock_t;
 
-class block_manager
-{
-private:
+class block_manager {
+ private:
   disk *d;
   std::map<uint32_t, int> using_blocks;
 
-public:
+ public:
   block_manager();
   struct superblock sb;
 
@@ -72,8 +73,7 @@ public:
 #define NINDIRECT (BLOCK_SIZE / sizeof(uint))
 #define MAXFILE (NDIRECT + NINDIRECT)
 
-typedef struct inode
-{
+typedef struct inode {
   short type;
   unsigned int size;
   unsigned int atime;
@@ -82,12 +82,11 @@ typedef struct inode
   // number of direct blocks: NDIRECT
   // number of indrect blocks: 1
   // total number of blocks a inode can have: MAXFILE(NDIRECT + NINDIRECT)
-  blockid_t blocks[NDIRECT + 1]; // Data block addresses
+  blockid_t blocks[NDIRECT + 1];  // Data block addresses
 } inode_t;
 
-class inode_manager
-{
-private:
+class inode_manager {
+ private:
   block_manager *bm;
   struct inode *get_inode(uint32_t inum);
   void put_inode(uint32_t inum, struct inode *ino);
@@ -95,7 +94,7 @@ private:
   void alloc_nth_block(inode_t *ino, uint32_t n);
   void free_nth_block(inode_t *ino, uint32_t n);
 
-public:
+ public:
   inode_manager();
   uint32_t alloc_inode(uint32_t type);
   void free_inode(uint32_t inum);

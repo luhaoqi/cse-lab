@@ -132,10 +132,11 @@ void inode_manager::free_inode(uint32_t inum) {
 inode_t *inode_manager::get_inode(uint32_t inum) {
   inode_t *ino_disk;
   char buf[BLOCK_SIZE];
-
+#ifndef TEST
   printf("\tim: get_inode %d\n", inum);
-  if (inum < 0 || inum > INODE_NUM) {
-    printf("\tim: (get_node) inum is out of range[0,INODE_NUM].\n");
+#endif
+  if (inum <= 0 || inum > INODE_NUM) {
+    printf("\tim: (get_node) inum is out of range[1,INODE_NUM].\n");
     return NULL;
   }
 
@@ -155,8 +156,9 @@ inode_t *inode_manager::get_inode(uint32_t inum) {
 void inode_manager::put_inode(uint32_t inum, inode_t *ino) {
   char buf[BLOCK_SIZE];
   inode_t *ino_disk;
-
+#ifndef TEST
   printf("\tim: put_inode %d\n", inum);
+#endif
   if (ino == NULL) return;
 
   bm->read_block(IBLOCK(inum, bm->sb.nblocks), buf);
@@ -227,7 +229,7 @@ void inode_manager::write_file(uint32_t inum, const char *buf, int size) {
    * you need to consider the situation when the size of buf
    * is larger or smaller than the size of original inode
    */
-  printf("\tim(wrirte_fild): write %d bytes to inode %d\n", size, inum);
+  // printf("\tim(wrirte_fild): write %d bytes to inode %d\n", size, inum);
   if (size < 0 || (uint64_t)size > MAXFILE * BLOCK_SIZE) {
     printf("\tim(wrirte_fild): size is out of range[0,%ld]\n",
            MAXFILE * BLOCK_SIZE);
