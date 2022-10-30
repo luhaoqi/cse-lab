@@ -7,6 +7,7 @@
 #include <iostream>
 #include <mutex>
 
+#include "extent_server.h"
 #include "rpc.h"
 
 #define MAX_LOG_SZ 131072
@@ -26,37 +27,133 @@
  */
 
 typedef unsigned long long txid_t;
-
+enum cmd_type {
+  CMD_BEGIN = 0,
+  CMD_COMMIT,
+  CMD_CREATE,
+  CMD_PUT,
+  CMD_GET,
+  CMD_GETATTR,
+  CMD_REMOVE,
+  CMD_DEFAULT
+};
 class chfs_command {
  public:
-  enum cmd_type {
-    CMD_BEGIN = 0,
-    CMD_COMMIT,
-    CMD_CREATE,
-    CMD_PUT,
-    CMD_GET,
-    CMD_GETATTR,
-    CMD_REMOVE,
-
-  };
-
-  cmd_type type = CMD_BEGIN;
+  cmd_type cmdTy;
   txid_t txid = 0;
-  // create need
-  uint32_t create_type, inum;
-  // put need (remove reuse old var)
-  uint32_t size_old, size_new;
-  std::string s_old, s_new;
-
   // constructor
-  chfs_command(cmd_type ty, txid_t id) : type(ty), txid(id) {}
-
-  // uint64_t size() const {
-  //   uint64_t s = sizeof(cmd_type) + sizeof(txid_t) + sizeof(uint32_t) * 4 +
-  //                sizeof(s_old) + sizeof(s_new);
-  //   return s;
-  // }
+  chfs_command(cmd_type cmd) : cmdTy(cmd), txid(0) {}
+  chfs_command(txid_t id) : cmdTy(CMD_DEFAULT), txid(id) {}
+  chfs_command(txid_t id, cmd_type cmd) : cmdTy(cmd), txid(id) {}
+  virtual void save_log(std::ofstream& out) = 0;
+  virtual void read_log(std::ifstream& in) = 0;
 };
+
+class chfs_command_begin : public chfs_command {
+ public:
+  chfs_command_begin() : chfs_command(CMD_BEGIN) {}
+  chfs_command_begin(txid_t id) : chfs_command(id, CMD_BEGIN) {}
+
+  void save_log(std::ofstream& out) {
+    out.write(reinterpret_cast<char*>(&cmdTy), sizeof(cmdTy));
+    out.write(reinterpret_cast<char*>(&txid), sizeof(txid));
+  }
+
+  void read_log(std::ifstream& in) {
+    in.read(reinterpret_cast<char*>(&txid), sizeof(txid));
+  }
+};
+
+class chfs_command_commit : public chfs_command {
+ public:
+  chfs_command_commit() : chfs_command(CMD_COMMIT) {}
+  chfs_command_commit(txid_t id) : chfs_command(id, CMD_COMMIT) {}
+
+  void save_log(std::ofstream& out) {
+    out.write(reinterpret_cast<char*>(&cmdTy), sizeof(cmdTy));
+    out.write(reinterpret_cast<char*>(&txid), sizeof(txid));
+  }
+
+  void read_log(std::ifstream& in) {
+    in.read(reinterpret_cast<char*>(&txid), sizeof(txid));
+  }
+};
+
+class chfs_command_create : public chfs_command {
+ public:
+  // 表示创建类型与创建后返回的inum
+  uint32_t type, inum;
+  chfs_command_create() : chfs_command(CMD_CREATE) {}
+  chfs_command_create(txid_t id, uint32_t ty, uint32_t inum_)
+      : chfs_command(id, CMD_CREATE), type(ty), inum(inum_) {}
+
+  void save_log(std::ofstream& out) {
+    out.write(reinterpret_cast<char*>(&cmdTy), sizeof(cmdTy));
+    out.write(reinterpret_cast<char*>(&txid), sizeof(txid));
+    out.write(reinterpret_cast<char*>(&inum), sizeof(inum));
+    out.write(reinterpret_cast<char*>(&type), sizeof(type));
+  }
+
+  void read_log(std::ifstream& in) {
+    in.read(reinterpret_cast<char*>(&txid), sizeof(txid));
+    in.read(reinterpret_cast<char*>(&inum), sizeof(inum));
+    in.read(reinterpret_cast<char*>(&type), sizeof(type));
+  }
+};
+
+class chfs_command_put : public chfs_command {
+ public:
+  uint32_t inum, size;
+  std::string str;
+  chfs_command_put() : chfs_command(CMD_PUT) {}
+  chfs_command_put(txid_t id, uint32_t inum_, uint32_t sz, const std::string& s)
+      : chfs_command(id, CMD_PUT), inum(inum_), size(sz), str(s) {}
+
+  void save_log(std::ofstream& out) {
+    out.write(reinterpret_cast<char*>(&cmdTy), sizeof(cmdTy));
+    out.write(reinterpret_cast<char*>(&txid), sizeof(txid));
+    out.write(reinterpret_cast<char*>(&inum), sizeof(inum));
+    out.write(reinterpret_cast<char*>(&size), sizeof(size));
+    assert(size == str.size());
+    const char* ch = str.c_str();
+    out.write(ch, size);
+  }
+
+  void read_log(std::ifstream& in) {
+    in.read(reinterpret_cast<char*>(&txid), sizeof(txid));
+    in.read(reinterpret_cast<char*>(&inum), sizeof(inum));
+    in.read(reinterpret_cast<char*>(&size), sizeof(size));
+    char* ch = new char[size + 1];
+    in.read(ch, size);
+    ch[size] = 0;
+    str = ch;
+    delete ch;
+  }
+};
+
+class chfs_command_remove : public chfs_command {
+ public:
+  uint32_t inum;
+  chfs_command_remove() : chfs_command(CMD_REMOVE) {}
+  chfs_command_remove(txid_t id, uint32_t inum_)
+      : chfs_command(id, CMD_REMOVE), inum(inum_) {}
+
+  void save_log(std::ofstream& out) {
+    out.write(reinterpret_cast<char*>(&cmdTy), sizeof(cmdTy));
+    out.write(reinterpret_cast<char*>(&txid), sizeof(txid));
+    out.write(reinterpret_cast<char*>(&inum), sizeof(inum));
+  }
+
+  void read_log(std::ifstream& in) {
+    // auto ptr = dynamic_cast<chfs_command_remove*>(p);
+    // assert(ptr != nullptr);
+    in.read(reinterpret_cast<char*>(&txid), sizeof(txid));
+    in.read(reinterpret_cast<char*>(&inum), sizeof(inum));
+  }
+};
+// 定义一个指针类型
+typedef chfs_command* chfs_command_ptr;
+
 /*
  * Your code here for Lab2A:
  * Implement class persister. A persister directly interacts with log files.
@@ -66,24 +163,79 @@ class chfs_command {
  * P.S. When and how to do checkpoint is up to you. Just keep your logfile size
  *      under MAX_LOG_SZ and checkpoint file size under DISK_SIZE.
  */
-template <typename command>
-class persister {
+// 要什么模板类！
+// 为了不重定义只能放里面了
+class chfs_persister {
  public:
-  persister(const std::string& file_dir);
-  ~persister();
+  // restored log data
+  std::vector<chfs_command*> log_entries;
+
+  chfs_persister(const std::string& dir) {
+    // DO NOT change the file names here
+    file_dir = dir;
+    file_path_checkpoint = file_dir + "/checkpoint.bin";
+    file_path_logfile = file_dir + "/logdata.bin";
+  }
+  ~chfs_persister() {
+    // Your code here for lab2A
+  }
 
   // persist data into solid binary file
   // You may modify parameters in these functions
-  void append_log(const command& log);
-  void checkpoint();
+  void append_log(chfs_command_ptr log) {
+    // Your code here for lab2A
+    log_entries.push_back(log);
+
+    std::ofstream out(file_path_logfile,
+                      std::ofstream::app | std::ofstream::binary);
+    log->save_log(out);
+    out.close();
+  }
+  void checkpoint() {
+    // Your code here for lab2A
+  }
 
   // restore data from solid binary file
   // You may modify parameters in these functions
-  void restore_logdata();
-  void restore_checkpoint();
-
-  // restored log data
-  std::vector<command> log_entries;
+  // 从文件中恢复log到log_entries中
+  void restore_logdata() {
+    // Your code here for lab2A
+    std::ifstream in(file_path_logfile, std::ifstream::binary);
+    cmd_type cmdTy;
+    while (in.read(reinterpret_cast<char*>(&cmdTy), sizeof(cmdTy))) {
+      chfs_command* log = nullptr;
+      switch (cmdTy) {
+        case CMD_BEGIN:
+          log = new chfs_command_begin();
+          assert(log->cmdTy == CMD_BEGIN);
+          break;
+        case CMD_COMMIT:
+          log = new chfs_command_commit();
+          assert(log->cmdTy == CMD_COMMIT);
+          break;
+        case CMD_CREATE:
+          log = new chfs_command_create();
+          assert(log->cmdTy == CMD_CREATE);
+          break;
+        case CMD_PUT:
+          log = new chfs_command_put();
+          assert(log->cmdTy == CMD_PUT);
+          break;
+        case CMD_REMOVE:
+          log = new chfs_command_remove();
+          assert(log->cmdTy == CMD_REMOVE);
+          break;
+        default:
+          assert(false);
+          break;
+      }
+      log->read_log(in);
+      log_entries.push_back(log);
+    }
+  }
+  void restore_checkpoint() {
+    // Your code here for lab2A
+  }
 
  private:
   std::mutex mtx;
@@ -92,123 +244,6 @@ class persister {
   std::string file_path_logfile;
 };
 
-template <typename command>
-persister<command>::persister(const std::string& dir) {
-  // DO NOT change the file names here
-  file_dir = dir;
-  file_path_checkpoint = file_dir + "/checkpoint.bin";
-  file_path_logfile = file_dir + "/logdata.bin";
-}
-
-template <typename command>
-persister<command>::~persister() {
-  // Your code here for lab2A
-}
-
-template <typename command>
-void persister<command>::append_log(const command& log) {
-  // Your code here for lab2A
-  log_entries.push_back(log);
-  std::ofstream out(file_path_logfile,
-                    std::ofstream::app | std::ofstream::binary);
-  out.write(reinterpret_cast<const char*>(&log.type), sizeof(log.type));
-  out.write(reinterpret_cast<const char*>(&log.txid), sizeof(log.txid));
-  switch (log.type) {
-    case chfs_command::CMD_CREATE:
-      out.write(reinterpret_cast<const char*>(&log.inum), sizeof(log.inum));
-      out.write(reinterpret_cast<const char*>(&log.create_type),
-                sizeof(log.create_type));
-      break;
-    case chfs_command::CMD_PUT:
-      out.write(reinterpret_cast<const char*>(&log.inum), sizeof(log.inum));
-      out.write(reinterpret_cast<const char*>(&log.size_old),
-                sizeof(log.size_old));
-      out.write(reinterpret_cast<const char*>(&log.size_new),
-                sizeof(log.size_new));
-      out.write(reinterpret_cast<const char*>(log.s_old.c_str()), log.size_old);
-      out.write(reinterpret_cast<const char*>(log.s_new.c_str()), log.size_new);
-      break;
-    case chfs_command::CMD_REMOVE:
-      out.write(reinterpret_cast<const char*>(&log.inum), sizeof(log.inum));
-      out.write(reinterpret_cast<const char*>(&log.size_old),
-                sizeof(log.size_old));
-      out.write(reinterpret_cast<const char*>(log.s_old.c_str()), log.size_old);
-      break;
-    default:
-      break;
-  }
-}
-
-template <typename command>
-void persister<command>::checkpoint() {
-  // Your code here for lab2A
-}
-
-template <typename command>
-void persister<command>::restore_logdata() {
-  // Your code here for lab2A
-  std::ifstream in(file_path_logfile, std::ios::binary);
-  if (in.is_open()) {
-    chfs_command::cmd_type type;
-    in.read(reinterpret_cast<char*>(&type), sizeof(type));
-    txid_t txid;
-    in.read(reinterpret_cast<char*>(&txid), sizeof(txid));
-    std::cout << "restore logdada: type=" << type << " txid=" << txid
-              << std::endl;
-
-    chfs_command cmd(type, txid);
-
-    uint32_t create_type, inum;
-    uint32_t size_old, size_new;
-    char *s_old, *s_new;
-    switch (type) {
-      case chfs_command::CMD_CREATE:
-        in.read(reinterpret_cast<char*>(&inum), sizeof(inum));
-        cmd.inum = inum;
-        in.read(reinterpret_cast<char*>(&create_type), sizeof(create_type));
-        cmd.create_type = create_type;
-        break;
-      case chfs_command::CMD_PUT:
-        in.read(reinterpret_cast<char*>(&inum), sizeof(inum));
-        cmd.inum = inum;
-        in.read(reinterpret_cast<char*>(&size_old), sizeof(size_old));
-        in.read(reinterpret_cast<char*>(&size_new), sizeof(size_new));
-        cmd.size_old = size_old;
-        cmd.size_new = size_new;
-        s_old = new char[size_old + 1];
-        s_new = new char[size_new + 1];
-        in.read(reinterpret_cast<char*>(&s_old), size_old);
-        in.read(reinterpret_cast<char*>(&s_new), size_new);
-        s_old[size_old] = s_new[size_new] = 0;
-        cmd.s_old = s_old;
-        cmd.s_new = s_new;
-        delete s_old;
-        delete s_new;
-        break;
-      case chfs_command::CMD_REMOVE:
-        in.read(reinterpret_cast<char*>(&inum), sizeof(inum));
-        cmd.inum = inum;
-        in.read(reinterpret_cast<char*>(&size_old), sizeof(size_old));
-        cmd.size_old = size_old;
-        s_old = new char[size_old + 1];
-        in.read(reinterpret_cast<char*>(&s_old), size_old);
-        s_old[size_old] = 0;
-        cmd.s_old = s_old;
-        delete s_old;
-        break;
-      default:
-        break;
-    }
-    log_entries.push_back(cmd);
-  }
-};
-
-template <typename command>
-void persister<command>::restore_checkpoint(){
-    // Your code here for lab2A
-
-};
-
-using chfs_persister = persister<chfs_command>;
+// using chfs_persister = persister<chfs_command*>;
 
 #endif  // persister_h

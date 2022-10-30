@@ -21,6 +21,7 @@ class extent_server {
 #endif
   inode_manager *im;
   chfs_persister *_persister;
+  std::map<uint32_t, uint32_t> inode_map;
 
  public:
   extent_server();
@@ -32,7 +33,7 @@ class extent_server {
   int remove(extent_protocol::extentid_t id, int &);
 
   // Your code here for lab2A: add logging APIs
-  void redo_log(const chfs_command &cmd);
+  void redo_log(chfs_command *log);
 };
 
 #endif

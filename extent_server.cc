@@ -29,25 +29,38 @@ extent_server::extent_server() {
 
   // Your code here for Lab2A: recover data on startup
   _persister->restore_logdata();
-  for (const auto &x : _persister->log_entries) redo_log(x);
+  for (const auto &x : _persister->log_entries) {
+    redo_log(x);
+  }
 }
 
-void extent_server::redo_log(const chfs_command &cmd) {
-  std::cout << "redo log: type=" << cmd.type << std::endl;
-  extent_protocol::extentid_t inum = cmd.inum;
-  int x;
-  switch (cmd.type) {
-    case chfs_command::CMD_CREATE:
-      create(cmd.create_type, inum);
+void extent_server::redo_log(chfs_command *log) {
+  cmd_type cmdTy = log->cmdTy;
+  switch (cmdTy) {
+    case CMD_BEGIN:
+    case CMD_COMMIT:
       break;
-    case chfs_command::CMD_PUT:
-      assert(cmd.s_new.size() != cmd.size_new);
-      put(inum, cmd.s_new, x);
-      break;
-    case chfs_command::CMD_REMOVE:
-      remove(inum, x);
-      break;
+    case CMD_CREATE: {
+      auto p = dynamic_cast<chfs_command_create *>(log);
+      assert(p != nullptr);
+      extent_protocol::extentid_t inum;
+      create(p->type, inum);
+      inode_map[p->inum] = inum;
+    } break;
+    case CMD_PUT: {
+      auto p = dynamic_cast<chfs_command_put *>(log);
+      assert(p != nullptr);
+      int r;
+      put(inode_map[p->inum], p->str, r);
+    } break;
+    case CMD_REMOVE: {
+      auto p = dynamic_cast<chfs_command_remove *>(log);
+      assert(p != nullptr);
+      int r;
+      remove(inode_map[p->inum], r);
+    } break;
     default:
+      assert(false);
       break;
   }
 }
@@ -56,14 +69,12 @@ int extent_server::create(uint32_t type, extent_protocol::extentid_t &id) {
   // alloc a new inode and return inum
   printf("extent_server: create inode\n");
   id = im->alloc_inode(type);
-  // add log
-  chfs_command cmd(chfs_command::CMD_CREATE, txid_manager.get_next_txid());
-  cmd.create_type = type;
-  cmd.inum = id;
-  _persister->append_log(cmd);
 
   // Lab2A: add create log into persist
-  // _persister->append_log(chfs_command::CMD_CREATE);
+  // append log
+  txid_t txid = txid_manager.get_next_txid();
+  chfs_command_ptr cmd_ptr = new chfs_command_create(txid, type, id);
+  _persister->append_log(cmd_ptr);
 
   return extent_protocol::OK;
 }
@@ -71,20 +82,15 @@ int extent_server::create(uint32_t type, extent_protocol::extentid_t &id) {
 int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &) {
   id &= 0x7fffffff;
 
-  // record old value
-  chfs_command cmd(chfs_command::CMD_PUT, txid_manager.get_next_txid());
-  cmd.inum = id;
-  get(id, cmd.s_old);
-  cmd.size_old = cmd.s_old.size();
-
   const char *cbuf = buf.c_str();
   int size = buf.size();
   im->write_file(id, cbuf, size);
 
-  // add log
-  cmd.s_new = buf;
-  cmd.size_new = size;
-  _persister->append_log(cmd);
+  // Lab2A: add create log into persist
+  // append log
+  txid_t txid = txid_manager.get_next_txid();
+  chfs_command *cmd_ptr = new chfs_command_put(txid, id, size, buf);
+  _persister->append_log(cmd_ptr);
 
   return extent_protocol::OK;
 }
@@ -127,16 +133,13 @@ int extent_server::remove(extent_protocol::extentid_t id, int &) {
 
   id &= 0x7fffffff;
 
-  // record old value
-  chfs_command cmd(chfs_command::CMD_PUT, txid_manager.get_next_txid());
-  cmd.inum = id;
-  get(id, cmd.s_old);
-  cmd.size_old = cmd.s_old.size();
-
   im->remove_file(id);
 
-  // add log
-  _persister->append_log(cmd);
+  // Lab2A: add create log into persist
+  // append log
+  txid_t txid = txid_manager.get_next_txid();
+  chfs_command *cmd_ptr = new chfs_command_remove(txid, id);
+  _persister->append_log(cmd_ptr);
 
   return extent_protocol::OK;
 }
