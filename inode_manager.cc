@@ -86,13 +86,15 @@ inode_manager::inode_manager() {
 
 /* Create a new file.
  * Return its inum. */
-uint32_t inode_manager::alloc_inode(uint32_t type) {
+uint32_t inode_manager::alloc_inode(uint32_t type, uint32_t pos) {
   /*
    * your code goes here.
    * note: the normal inode block should begin from the 2nd inode block.
    * the 1st is used for root_dir, see inode_manager::inode_manager().
    */
   static int inum = 0;
+  // pos不为0表示强制alloc pos
+  if (pos > 0) inum = pos - 1;
   for (int i = 0; i < INODE_NUM; i++) {
     inum = inum % INODE_NUM + 1;
     inode_t *ino = get_inode(inum);

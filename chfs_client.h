@@ -2,50 +2,40 @@
 #define chfs_client_h
 
 #include <string>
-//#include "chfs_protocol.h"
-#include "extent_client.h"
+// #include "chfs_protocol.h"
 #include <vector>
 
-class chfs_client
-{
+#include "extent_client.h"
+
+class chfs_client {
   extent_client *ec;
 
-public:
+ public:
   typedef unsigned long long inum;
-  enum xxstatus
-  {
-    OK,
-    RPCERR,
-    NOENT,
-    IOERR,
-    EXIST
-  };
+  enum xxstatus { OK, RPCERR, NOENT, IOERR, EXIST };
   typedef int status;
 
-  struct fileinfo
-  {
+  struct fileinfo {
     unsigned long long size;
     unsigned long atime;
     unsigned long mtime;
     unsigned long ctime;
   };
-  struct dirinfo
-  {
+  struct dirinfo {
     unsigned long atime;
     unsigned long mtime;
     unsigned long ctime;
   };
-  struct dirent
-  {
+  struct dirent {
     std::string name;
     chfs_client::inum inum;
   };
 
-private:
+ private:
   static std::string filename(inum);
   static inum n2i(std::string);
 
-public:
+ public:
   chfs_client();
   chfs_client(std::string, std::string);
 
@@ -66,6 +56,9 @@ public:
   int mkdir(inum, const char *, mode_t, inum &);
   int symlink(inum parent, const char *name, const char *link, inum &ino_out);
   int readlink(inum ino, std::string &data);
+
+  txid_t begin_transaction();
+  void commit_transaction(txid_t txid);
 
   /** you may need to add symbolic link related methods here.*/
 };

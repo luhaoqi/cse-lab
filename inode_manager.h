@@ -9,7 +9,7 @@
 
 #include "extent_protocol.h"
 
-#define TEST
+// #define TEST
 
 #define DISK_SIZE 1024 * 1024 * 16
 #define BLOCK_SIZE 512
@@ -96,7 +96,7 @@ class inode_manager {
 
  public:
   inode_manager();
-  uint32_t alloc_inode(uint32_t type);
+  uint32_t alloc_inode(uint32_t type, uint32_t pos = 0);
   void free_inode(uint32_t inum);
   void read_file(uint32_t inum, char **buf, int *size);
   void write_file(uint32_t inum, const char *buf, int size);
