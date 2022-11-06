@@ -10,18 +10,9 @@ class extent_protocol {
   typedef int status;
   typedef unsigned long long extentid_t;
   enum xxstatus { OK, RPCERR, NOENT, IOERR };
-  enum rpc_numbers {
-    put = 0x6001,
-    get,
-    getattr,
-    remove,
-    create
-  };
+  enum rpc_numbers { put = 0x6001, get, getattr, remove, create };
 
-  enum types {
-    T_DIR = 1,
-    T_FILE
-  };
+  enum types { T_DIR = 1, T_FILE, T_SYMBOLIC_LINK };
 
   struct attr {
     uint32_t type;
@@ -32,9 +23,7 @@ class extent_protocol {
   };
 };
 
-inline unmarshall &
-operator>>(unmarshall &u, extent_protocol::attr &a)
-{
+inline unmarshall &operator>>(unmarshall &u, extent_protocol::attr &a) {
   u >> a.type;
   u >> a.atime;
   u >> a.mtime;
@@ -43,9 +32,7 @@ operator>>(unmarshall &u, extent_protocol::attr &a)
   return u;
 }
 
-inline marshall &
-operator<<(marshall &m, extent_protocol::attr a)
-{
+inline marshall &operator<<(marshall &m, extent_protocol::attr a) {
   m << a.type;
   m << a.atime;
   m << a.mtime;
@@ -54,4 +41,4 @@ operator<<(marshall &m, extent_protocol::attr a)
   return m;
 }
 
-#endif 
+#endif

@@ -2,17 +2,19 @@
 #define chfs_client_h
 
 #include <string>
-#include "lock_protocol.h"
+
 #include "lock_client.h"
-#include "extent_client.h"
+#include "lock_protocol.h"
+// #include "chfs_protocol.h"
 #include <vector>
 
+#include "extent_client.h"
 
 class chfs_client {
   extent_client *ec;
   lock_client *lc;
- public:
 
+ public:
   typedef unsigned long long inum;
   enum xxstatus { OK, RPCERR, NOENT, IOERR, EXIST };
   typedef int status;
@@ -42,6 +44,7 @@ class chfs_client {
 
   bool isfile(inum);
   bool isdir(inum);
+  bool issymbolic(inum);
 
   int getfile(inum, fileinfo &);
   int getdir(inum, dirinfo &);
@@ -52,10 +55,15 @@ class chfs_client {
   int readdir(inum, std::list<dirent> &);
   int write(inum, size_t, off_t, const char *, size_t &);
   int read(inum, size_t, off_t, std::string &);
-  int unlink(inum,const char *);
-  int mkdir(inum , const char *, mode_t , inum &);
-  
+  int unlink(inum, const char *);
+  int mkdir(inum, const char *, mode_t, inum &);
+  int symlink(inum parent, const char *name, const char *link, inum &ino_out);
+  int readlink(inum ino, std::string &data);
+
+  txid_t begin_transaction();
+  void commit_transaction(txid_t txid);
+
   /** you may need to add symbolic link related methods here.*/
 };
 
-#endif 
+#endif

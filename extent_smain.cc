@@ -1,18 +1,17 @@
-#include "rpc.h"
 #include <arpa/inet.h>
-#include <unistd.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
 #include "extent_server.h"
+#include "rpc.h"
 
 // Main loop of extent server
 
-int
-main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
   int count = 0;
 
-  if(argc != 2){
+  if (argc != 2) {
     fprintf(stderr, "Usage: %s port\n", argv[0]);
     exit(1);
   }
@@ -20,7 +19,7 @@ main(int argc, char *argv[])
   setvbuf(stdout, NULL, _IONBF, 0);
 
   char *count_env = getenv("RPC_COUNT");
-  if(count_env != NULL){
+  if (count_env != NULL) {
     count = atoi(count_env);
   }
 
@@ -33,6 +32,5 @@ main(int argc, char *argv[])
   server.reg(extent_protocol::remove, &ls, &extent_server::remove);
   server.reg(extent_protocol::create, &ls, &extent_server::create);
 
-  while(1)
-    sleep(1000);
+  while (1) sleep(1000);
 }
