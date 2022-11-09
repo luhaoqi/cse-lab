@@ -29,7 +29,7 @@ extent_server::extent_server() {
       extent_protocol::extentid_t inum = 0;
       assert(log_create->inum != (uint32_t)1);
       assert(log_create->inum == (uint32_t)i);
-      create(log_create->type, inum, log_create->inum);
+      create_pos(log_create->type, log_create->inum, inum);
       assert((uint32_t)inum == log_create->inum);
     }
     if ((log_put = _persister->checkpoint_put[i]) != nullptr) {
@@ -43,8 +43,26 @@ extent_server::extent_server() {
   printf("redo end\n");
 }
 
-int extent_server::create(uint32_t type, extent_protocol::extentid_t &id,
-                          uint32_t pos) {
+// 普通的 create
+int extent_server::create(uint32_t type, extent_protocol::extentid_t &id) {
+  // alloc a new inode and return inum
+  printf("extent_server: create inode\n");
+  // printf("[in create] %u\n", type);
+  id = im->alloc_inode(type);
+  printf("in [create] alloc id=%llu pos=%u\n", id, 0);
+
+  // Lab2A: add create log into persist
+  // append log
+  txid_t txid = txid_manager.get_txid();
+  chfs_command_ptr cmd_ptr = new chfs_command_create(txid, type, id);
+  append_log(cmd_ptr);
+
+  return extent_protocol::OK;
+}
+
+// 带pos的版本 用于恢复
+int extent_server::create_pos(uint32_t type, uint32_t pos,
+                              extent_protocol::extentid_t &id) {
   // alloc a new inode and return inum
   printf("extent_server: create inode\n");
   // printf("[in create] %u\n", type);
@@ -120,6 +138,22 @@ int extent_server::remove(extent_protocol::extentid_t id, int &) {
   // append log
   txid_t txid = txid_manager.get_txid();
   chfs_command *cmd_ptr = new chfs_command_remove(txid, id);
+  append_log(cmd_ptr);
+
+  return extent_protocol::OK;
+}
+
+int extent_server::begin(int, int &) {
+  txid_t txid = txid_manager.get_next_txid();
+  chfs_command *cmd_ptr = new chfs_command_begin(txid);
+  append_log(cmd_ptr);
+
+  return extent_protocol::OK;
+}
+
+int extent_server::commit(int, int &) {
+  txid_t txid = txid_manager.get_txid();
+  chfs_command *cmd_ptr = new chfs_command_commit(txid);
   append_log(cmd_ptr);
 
   return extent_protocol::OK;

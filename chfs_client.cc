@@ -36,18 +36,18 @@ chfs_client::chfs_client(std::string extent_dst, std::string lock_dst) {
 //     printf("error init root dir\n");  // XYB: init root dir
 // }
 
-txid_t chfs_client::begin_transaction() {
-  // BEGIN
-  printf("begin_transaction\n");
-  txid_t txid = ec->get_next_txid();
-  ec->append_log(new chfs_command_begin(txid));
-  return txid;
-}
+// txid_t chfs_client::begin_transaction() {
+//   // BEGIN
+//   printf("begin_transaction\n");
+//   txid_t txid = ec->get_next_txid();
+//   ec->append_log(new chfs_command_begin(txid));
+//   return txid;
+// }
 
-void chfs_client::commit_transaction(txid_t txid) {
-  // COMMIT
-  ec->append_log(new chfs_command_commit(txid));
-}
+// void chfs_client::commit_transaction(txid_t txid) {
+//   // COMMIT
+//   ec->append_log(new chfs_command_commit(txid));
+// }
 
 chfs_client::inum chfs_client::n2i(std::string n) {
   std::istringstream ist(n);
@@ -171,7 +171,8 @@ int chfs_client::setattr(inum ino, size_t size) {
    * note: get the content of inode ino, and modify its content
    * according to the size (<, =, or >) content length.
    */
-  txid_t txid = begin_transaction();
+  // txid_t txid = begin_transaction();
+  ec->begin();
 
   std::string buf;
   if ((r = ec->get(ino, buf)) != OK) goto commit;
@@ -180,7 +181,8 @@ int chfs_client::setattr(inum ino, size_t size) {
   if ((r = ec->put(ino, buf)) != OK) goto commit;
 
 commit:
-  commit_transaction(txid);
+  // commit_transaction(txid);
+  ec->commit();
   return r;
 }
 
@@ -195,13 +197,15 @@ int chfs_client::create(inum parent, const char *name, mode_t mode,
    * after create file or dir, you must remember to modify the parent
    * infomation.
    */
-  txid_t txid = begin_transaction();
+  // txid_t txid = begin_transaction();
+  ec->begin();
 
   bool found;
   std::string buf;
   if ((r = lookup(parent, name, found, ino_out)) != OK) goto commit;
   if (found) {
-    commit_transaction(txid);
+    // commit_transaction(txid);
+    ec->commit();
     return EXIST;
   }
 
@@ -215,7 +219,8 @@ int chfs_client::create(inum parent, const char *name, mode_t mode,
   if ((r = ec->put(parent, buf)) != OK) goto commit;
 
 commit:
-  commit_transaction(txid);
+  // commit_transaction(txid);
+  ec->commit();
   return r;
 }
 
@@ -231,14 +236,16 @@ int chfs_client::mkdir(inum parent, const char *name, mode_t mode,
    * infomation.
    */
 
-  txid_t txid = begin_transaction();
+  // txid_t txid = begin_transaction();
+  ec->begin();
 
   bool found;
   std::string buf;
 
   if ((r = lookup(parent, name, found, ino_out)) != OK) goto commit;
   if (found) {
-    commit_transaction(txid);
+    // commit_transaction(txid);
+    ec->commit();
     return EXIST;
   }
 
@@ -251,7 +258,8 @@ int chfs_client::mkdir(inum parent, const char *name, mode_t mode,
   if ((r = ec->put(parent, buf)) != OK) goto commit;
 
 commit:
-  commit_transaction(txid);
+  // commit_transaction(txid);
+  ec->commit();
   return r;
 }
 
@@ -346,7 +354,8 @@ int chfs_client::write(inum ino, size_t size, off_t off, const char *data,
    * note: write using ec->put().
    * when off > length of original file, fill the holes with '\0'.
    */
-  txid_t txid = begin_transaction();
+  // txid_t txid = begin_transaction();
+  ec->begin();
 
   std::string buf, str(data, size);
   if ((r = ec->get(ino, buf)) != OK) goto commit;
@@ -364,7 +373,8 @@ int chfs_client::write(inum ino, size_t size, off_t off, const char *data,
   if ((r = ec->put(ino, buf)) != OK) goto commit;
 
 commit:
-  commit_transaction(txid);
+  // commit_transaction(txid);
+  ec->commit();
   return r;
 }
 
@@ -378,7 +388,8 @@ int chfs_client::unlink(inum parent, const char *name) {
    * and update the parent directory content.
    */
 
-  txid_t txid = begin_transaction();
+  // txid_t txid = begin_transaction();
+  ec->begin();
 
   bool found = false;
   std::string buf;
@@ -401,7 +412,8 @@ int chfs_client::unlink(inum parent, const char *name) {
   if ((r = ec->put(parent, buf)) != OK) goto commit;
 
 commit:
-  commit_transaction(txid);
+  // commit_transaction(txid);
+  ec->commit();
   return r;
 }
 
@@ -409,7 +421,8 @@ int chfs_client::symlink(inum parent, const char *name, const char *link,
                          inum &ino_out) {
   int r = OK;
 
-  txid_t txid = begin_transaction();
+  // txid_t txid = begin_transaction();
+  ec->begin();
 
   // check if existed
   bool found = false;
@@ -417,7 +430,8 @@ int chfs_client::symlink(inum parent, const char *name, const char *link,
   chfs_client::inum t;
   if ((r = lookup(parent, name, found, t)) != OK) goto commit;
   if (found) {
-    commit_transaction(txid);
+    // commit_transaction(txid);
+    ec->commit();
     return EXIST;
   }
   // pick an inum and init the symlink
@@ -431,7 +445,8 @@ int chfs_client::symlink(inum parent, const char *name, const char *link,
   if ((r = ec->put(parent, buf)) != OK) goto commit;
 
 commit:
-  commit_transaction(txid);
+  // commit_transaction(txid);
+  ec->commit();
   return r;
 }
 

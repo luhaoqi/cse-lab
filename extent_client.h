@@ -24,8 +24,10 @@ class extent_client {
   extent_protocol::status put(extent_protocol::extentid_t eid, std::string buf);
   extent_protocol::status remove(extent_protocol::extentid_t eid);
 
-  txid_t get_next_txid() { return es->txid_manager.get_next_txid(); }
-  void append_log(chfs_command_ptr cmd) { es->append_log(cmd); }
+  extent_protocol::status begin();
+  extent_protocol::status commit();
+  // txid_t get_next_txid() { return es->txid_manager.get_next_txid(); }
+  // void append_log(chfs_command_ptr cmd) { es->append_log(cmd); }
 };
 
 #endif

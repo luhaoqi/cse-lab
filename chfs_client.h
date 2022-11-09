@@ -60,8 +60,8 @@ class chfs_client {
   int symlink(inum parent, const char *name, const char *link, inum &ino_out);
   int readlink(inum ino, std::string &data);
 
-  txid_t begin_transaction();
-  void commit_transaction(txid_t txid);
+  // txid_t begin_transaction();
+  // void commit_transaction(txid_t txid);
 
   /** you may need to add symbolic link related methods here.*/
 };

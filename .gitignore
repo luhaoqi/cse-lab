@@ -4,3 +4,16 @@ log/
 *.o
 *.d
 *.log
+
+//一些可执行文件
+chfs_client
+demo_client
+demo_server
+extent_server
+lock_demo
+lock_server
+lock_tester
+librpc.a
+test-lab2b-part1-g
+test-lab2b-part3-a
+test-lab2b-part3-b

@@ -26,11 +26,17 @@ class extent_server {
  public:
   extent_server();
 
-  int create(uint32_t type, extent_protocol::extentid_t &id, uint32_t pos = 0);
+  int create(uint32_t type, extent_protocol::extentid_t &id);
+  int create_pos(uint32_t type, uint32_t pos, extent_protocol::extentid_t &id);
   int put(extent_protocol::extentid_t id, std::string, int &);
   int get(extent_protocol::extentid_t id, std::string &);
   int getattr(extent_protocol::extentid_t id, extent_protocol::attr &);
   int remove(extent_protocol::extentid_t id, int &);
+
+  // lab2a add begin and commit
+  // 至少一个参数+一个引用
+  int begin(int, int &);
+  int commit(int, int &);
 
   // get global transaction ID
   // 关于为什么写在这里:别的地方都编译错误
@@ -42,8 +48,12 @@ class extent_server {
     txid_t get_txid() { return txid; }
     void set_txid(txid_t id) { txid = id; }
   } txid_manager;
+
   // Your code here for lab2A: add logging APIs
-  void append_log(chfs_command_ptr cmd) { _persister->append_log(cmd); }
+  void append_log(chfs_command_ptr cmd) {
+    // in lab2B not save log
+    //_persister->append_log(cmd);
+  }
 };
 
 #endif
