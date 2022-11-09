@@ -66,4 +66,17 @@ class chfs_client {
   /** you may need to add symbolic link related methods here.*/
 };
 
+// 仿照std::lock_guard 在生命周期结束的时候自动释放锁
+class LockGuard {
+ public:
+  LockGuard(lock_client *lc, lock_protocol::lockid_t lid) : lc(lc), lid(lid) {
+    lc->acquire(lid);
+  }
+  ~LockGuard() { lc->release(lid); }
+
+ private:
+  lock_client *lc;
+  lock_protocol::lockid_t lid;
+};
+
 #endif
