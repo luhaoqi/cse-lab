@@ -65,6 +65,7 @@
         "xloctime": "cpp",
         "forward_list": "cpp",
         "optional": "cpp",
-        "ratio": "cpp"
+        "ratio": "cpp",
+        "condition_variable": "cpp"
     }
 }
