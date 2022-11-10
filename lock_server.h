@@ -17,6 +17,7 @@ class lock_server {
   int nacquire;
   std::map<lock_protocol::lockid_t, bool> lck_manager;
   // std::condition_variabl 开map insert太遭罪 不能拷贝
+  // 解决方案 使用map<...,condition_variable *>
   std::condition_variable cv;
   // 对map的锁，可以实现不同inum的并行，可以扩展成一个map多个锁，增加并行程度
   std::mutex mtx;
