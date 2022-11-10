@@ -15,6 +15,8 @@
 
 extent_server::extent_server() {
   im = new inode_manager();
+
+  /*
   _persister = new chfs_persister("log");  // DO NOT change the dir name here
 
   // Your code here for Lab2A: recover data on startup
@@ -41,6 +43,7 @@ extent_server::extent_server() {
   }
   _persister->log_entries.clear();
   printf("redo end\n");
+  */
 }
 
 // 普通的 create

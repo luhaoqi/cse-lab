@@ -101,6 +101,8 @@ void fuseserver_getattr(fuse_req_t req, fuse_ino_t ino,
   chfs_client::inum inum = ino;  // req->in.h.nodeid;
   chfs_client::status ret;
 
+  // LockGuard lck(chfs->lc, inum);
+
   ret = getattr(inum, st);
   if (ret != chfs_client::OK) {
     fuse_reply_err(req, ENOENT);
@@ -133,7 +135,9 @@ void fuseserver_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
     // Note: fill st using getattr before fuse_reply_attr
     struct stat st;
     chfs_client::inum inum = ino;  // req->in.h.nodeid;
-    // chfs_client::status ret;
+                                   // chfs_client::status ret;
+
+    // LockGuard lck(chfs->lc, inum);
 
     if (chfs->setattr(inum, attr->st_size) != chfs_client::OK) {
       fuse_reply_err(req, ENOENT);
@@ -168,6 +172,9 @@ void fuseserver_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 #if 1
   // Change the above "#if 0" to "#if 1", and your code goes here
   std::string buf;
+
+  // LockGuard lck(chfs->lc, ino);
+
   if (chfs->read(ino, size, off, buf) == chfs_client::OK)
     fuse_reply_buf(req, buf.data(), buf.size());
   else
@@ -195,6 +202,8 @@ void fuseserver_read(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 void fuseserver_write(fuse_req_t req, fuse_ino_t ino, const char *buf,
                       size_t size, off_t off, struct fuse_file_info *fi) {
 #if 1
+  // LockGuard lck(chfs->lc, ino);
+
   // Change the above line to "#if 1", and your code goes here
   if (chfs->write(ino, size, off, buf, size) == chfs_client::OK)
     fuse_reply_write(req, size);
@@ -241,12 +250,17 @@ chfs_client::status fuseserver_createhelper(fuse_ino_t parent, const char *name,
     ret = chfs->mkdir(parent, name, mode, inum);
   if (ret != chfs_client::OK) return ret;
   e->ino = inum;
+
+  // LockGuard lck(chfs->lc, inum);
+
   ret = getattr(inum, e->attr);
   return ret;
 }
 
 void fuseserver_create(fuse_req_t req, fuse_ino_t parent, const char *name,
                        mode_t mode, struct fuse_file_info *fi) {
+  // LockGuard lck(chfs->lc, parent);
+
   struct fuse_entry_param e;
   chfs_client::status ret;
   if ((ret = fuseserver_createhelper(parent, name, mode, &e,
@@ -265,6 +279,8 @@ void fuseserver_create(fuse_req_t req, fuse_ino_t parent, const char *name,
 
 void fuseserver_mknod(fuse_req_t req, fuse_ino_t parent, const char *name,
                       mode_t mode, dev_t rdev) {
+  // LockGuard lck(chfs->lc, parent);
+
   struct fuse_entry_param e;
   chfs_client::status ret;
   if ((ret = fuseserver_createhelper(parent, name, mode, &e,
@@ -294,10 +310,13 @@ void fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name) {
   e.generation = 0;
   bool found = false;
 
+  // LockGuard lck(chfs->lc, parent);
+
   chfs_client::inum ino;
   chfs->lookup(parent, name, found, ino);
 
   if (found) {
+    // LockGuard lck(chfs->lc, ino);
     e.ino = ino;
     getattr(ino, e.attr);
     fuse_reply_entry(req, &e);
@@ -347,6 +366,8 @@ void fuseserver_readdir(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 
   printf("fuseserver_readdir\n");
 
+  // LockGuard lck(chfs->lc, inum);
+
   if (!chfs->isdir(inum)) {
     fuse_reply_err(req, ENOTDIR);
     return;
@@ -382,6 +403,8 @@ void fuseserver_open(fuse_req_t req, fuse_ino_t ino,
 //
 void fuseserver_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
                       mode_t mode) {
+  // LockGuard lck(chfs->lc, parent);
+
   struct fuse_entry_param e;
   // In chfs, timeouts are always set to 0.0, and generations are always set to
   // 0
@@ -418,6 +441,8 @@ void fuseserver_mkdir(fuse_req_t req, fuse_ino_t parent, const char *name,
 // Do *not* allow unlinking of a directory.
 //
 void fuseserver_unlink(fuse_req_t req, fuse_ino_t parent, const char *name) {
+  // LockGuard lck(chfs->lc, parent);
+
   int r;
   if ((r = chfs->unlink(parent, name)) == chfs_client::OK) {
     fuse_reply_err(req, 0);
@@ -465,6 +490,8 @@ void fuseserver_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
   e.entry_timeout = 0.0;
   e.generation = 0;
 
+  // LockGuard lck(chfs->lc, parent);
+
   stat = chfs->symlink(parent, name, link, ino);
   e.ino = ino;
   if (stat != chfs_client::OK) {
@@ -474,6 +501,8 @@ void fuseserver_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
       fuse_reply_err(req, ENOENT);
     return;
   }
+
+  // LockGuard lck2(chfs->lc, ino);
 
   if (getattr(ino, e.attr) != chfs_client::OK) {
     fuse_reply_err(req, ENOENT);
@@ -495,6 +524,8 @@ void fuseserver_symlink(fuse_req_t req, const char *link, fuse_ino_t parent,
  */
 void fuseserver_readlink(fuse_req_t req, fuse_ino_t ino) {
   std::string buf;
+
+  // LockGuard lck(chfs->lc, ino);
 
   if (chfs->readlink(ino, buf) != chfs_client::OK) {
     fuse_reply_err(req, ENOENT);

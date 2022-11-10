@@ -12,9 +12,9 @@
 
 class chfs_client {
   extent_client *ec;
-  lock_client *lc;
 
  public:
+  lock_client *lc;
   typedef unsigned long long inum;
   enum xxstatus { OK, RPCERR, NOENT, IOERR, EXIST };
   typedef int status;
@@ -69,10 +69,15 @@ class chfs_client {
 // 仿照std::lock_guard 在生命周期结束的时候自动释放锁
 class LockGuard {
  public:
-  LockGuard(lock_client *lc, lock_protocol::lockid_t lid) : lc(lc), lid(lid) {
+  LockGuard(lock_client *lc_, lock_protocol::lockid_t lid_)
+      : lc(lc_), lid(lid_) {
     lc->acquire(lid);
+    printf("LockGuard have acquired lock %llu\n", lid);
   }
-  ~LockGuard() { lc->release(lid); }
+  ~LockGuard() {
+    lc->release(lid);
+    printf("LockGuard have released lock %llu\n", lid);
+  }
 
  private:
   lock_client *lc;

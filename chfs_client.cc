@@ -21,9 +21,11 @@
 
 chfs_client::chfs_client(std::string extent_dst, std::string lock_dst) {
   ec = new extent_client(extent_dst);
+
   // Lab2B: Use lock_client_cache when you test lock_cache
   lc = new lock_client(lock_dst);
-  // lc = new lock_client_cache(lock_dst);
+  LockGuard lck(lc, 1);
+  //  lc = new lock_client_cache(lock_dst);
   if (ec->put(1, "") != extent_protocol::OK)
     printf("error init root dir\n");  // XYB: init root dir
 }
@@ -63,18 +65,19 @@ std::string chfs_client::filename(inum inum) {
 }
 
 bool chfs_client::isfile(inum inum) {
+  LockGuard lck(lc, inum);
   extent_protocol::attr a;
 
   if (ec->getattr(inum, a) != extent_protocol::OK) {
-    printf("error getting attr\n");
+    // printf("error getting attr\n");
     return false;
   }
 
   if (a.type == extent_protocol::T_FILE) {
-    printf("isfile: %lld is a file\n", inum);
+    // printf("isfile: %lld is a file\n", inum);
     return true;
   }
-  printf("isfile: %lld is not a file\n", inum);
+  // printf("isfile: %lld is not a file\n", inum);
   return false;
 }
 /** Your code here for Lab...
@@ -84,41 +87,44 @@ bool chfs_client::isfile(inum inum) {
  * */
 
 bool chfs_client::isdir(inum inum) {
+  LockGuard lck(lc, inum);
   extent_protocol::attr a;
 
   if (ec->getattr(inum, a) != extent_protocol::OK) {
-    printf("error getting attr\n");
+    // printf("error getting attr\n");
     return false;
   }
 
   if (a.type == extent_protocol::T_DIR) {
-    printf("isdir: %lld is a dir\n", inum);
+    // printf("isdir: %lld is a dir\n", inum);
     return true;
   }
-  printf("isdir: %lld is not a dir\n", inum);
+  // printf("isdir: %lld is not a dir\n", inum);
   return false;
 }
 
 bool chfs_client::issymbolic(inum inum) {
+  LockGuard lck(lc, inum);
   extent_protocol::attr a;
 
   if (ec->getattr(inum, a) != extent_protocol::OK) {
-    printf("error getting attr\n");
+    // printf("error getting attr\n");
     return false;
   }
 
   if (a.type == extent_protocol::T_SYMBOLIC_LINK) {
-    printf("issymbolic: %lld is a symbolic link\n", inum);
+    // printf("issymbolic: %lld is a symbolic link\n", inum);
     return true;
   }
-  printf("issymbolic: %lld is not a symbolic link\n", inum);
+  // printf("issymbolic: %lld is not a symbolic link\n", inum);
   return false;
 }
 
 int chfs_client::getfile(inum inum, fileinfo &fin) {
+  LockGuard lck(lc, inum);
   int r = OK;
 
-  printf("getfile %016llx\n", inum);
+  // printf("getfile %016llx\n", inum);
   extent_protocol::attr a;
   if (ec->getattr(inum, a) != extent_protocol::OK) {
     r = IOERR;
@@ -129,16 +135,17 @@ int chfs_client::getfile(inum inum, fileinfo &fin) {
   fin.mtime = a.mtime;
   fin.ctime = a.ctime;
   fin.size = a.size;
-  printf("getfile %016llx -> sz %llu\n", inum, fin.size);
+  // printf("getfile %016llx -> sz %llu\n", inum, fin.size);
 
 release:
   return r;
 }
 
 int chfs_client::getdir(inum inum, dirinfo &din) {
+  LockGuard lck(lc, inum);
   int r = OK;
 
-  printf("getdir %016llx\n", inum);
+  // printf("getdir %016llx\n", inum);
   extent_protocol::attr a;
   if (ec->getattr(inum, a) != extent_protocol::OK) {
     r = IOERR;
@@ -164,6 +171,7 @@ release:
 // Only support set size of attr
 // Your code here for Lab2A: add logging to ensure atomicity
 int chfs_client::setattr(inum ino, size_t size) {
+  LockGuard lck(lc, ino);
   int r = OK;
 
   /*
@@ -189,8 +197,10 @@ commit:
 // Your code here for Lab2A: add logging to ensure atomicity
 int chfs_client::create(inum parent, const char *name, mode_t mode,
                         inum &ino_out) {
+  LockGuard lck(lc, parent);
+
   int r = OK;
-  printf("[chfs_client] [create]\n");
+  // printf("[chfs_client] [create]\n");
   /*
    * your code goes here.
    * note: lookup is what you need to check if file exist;
@@ -227,6 +237,8 @@ commit:
 // Your code here for Lab2A: add logging to ensure atomicity
 int chfs_client::mkdir(inum parent, const char *name, mode_t mode,
                        inum &ino_out) {
+  LockGuard lck(lc, parent);
+
   int r = OK;
 
   /*
@@ -326,6 +338,7 @@ int chfs_client::readdir(inum dir, std::list<dirent> &list) {
 }
 
 int chfs_client::read(inum ino, size_t size, off_t off, std::string &data) {
+  LockGuard lck(lc, ino);
   int r = OK;
 
   /*
@@ -347,6 +360,7 @@ int chfs_client::read(inum ino, size_t size, off_t off, std::string &data) {
 // Your code here for Lab2A: add logging to ensure atomicity
 int chfs_client::write(inum ino, size_t size, off_t off, const char *data,
                        size_t &bytes_written) {
+  LockGuard lck(lc, ino);
   int r = OK;
 
   /*
@@ -380,6 +394,7 @@ commit:
 
 // Your code here for Lab2A: add logging to ensure atomicity
 int chfs_client::unlink(inum parent, const char *name) {
+  LockGuard lck(lc, parent);
   int r = OK;
 
   /*
@@ -396,7 +411,7 @@ int chfs_client::unlink(inum parent, const char *name) {
   size_t erase_start, erase_after;
   inum inum;
   if ((r = lookup(parent, name, found, inum)) != OK || !found) {
-    printf("unlink empty file!");
+    // printf("unlink empty file!");
     goto commit;
   }
 
@@ -419,6 +434,7 @@ commit:
 
 int chfs_client::symlink(inum parent, const char *name, const char *link,
                          inum &ino_out) {
+  LockGuard lck(lc, parent);
   int r = OK;
 
   // txid_t txid = begin_transaction();
@@ -451,6 +467,7 @@ commit:
 }
 
 int chfs_client::readlink(inum ino, std::string &data) {
+  LockGuard lck(lc, ino);
   int r = OK;
 
   std::string buf;
