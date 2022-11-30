@@ -517,7 +517,7 @@ int main(int argc, char *argv[]) {
     fprintf(stderr, "Usage: chfs_client <mountpoint> <port-extent-server>\n");
     exit(1);
   }
-#endif
+#else
   if (argc != 2) {
     fprintf(stderr, "Usage: chfs_client <mountpoint>\n");
     exit(1);
