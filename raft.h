@@ -347,6 +347,7 @@ template<typename state_machine, typename command>
 int raft<state_machine, command>::append_entries(append_entries_args<command> arg, append_entries_reply &reply) {
     // Lab3: Your code here
     std::unique_lock <std::mutex> lock(mtx);
+    //  Reply false if term < currentTerm
     if (arg.term < current_term) {
         reply.success = false;
         reply.term = current_term;
@@ -360,6 +361,34 @@ int raft<state_machine, command>::append_entries(append_entries_args<command> ar
         current_term = arg.term;
         reply.term = current_term;
         reply.success = true;
+    } else {
+        // true append entries RPC
+
+        //Reply false if log does not contain an entry at prevLogIndex whose term matches prevLogTerm
+        if ((int) log.size() < arg.prevLogIndex || log[arg.prevLogIndex].term != arg.prevLogTerm) {
+            reply.term = current_term;
+            reply.success = false;
+            return raft_rpc_status::OK;
+        }
+        //  If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it
+        size_t i;
+        for (i = arg.prevLogIndex + 1; i < arg.entries.size() && i < log.size(); i++) {
+            if (arg.entries[i].term != log[i].term) break;
+        }
+        // pop logs until index is i (i also pop)
+        while (log.size() > i)
+            log.pop_back();
+        // Append any new entries not already in the log
+        while (i < arg.entries.size()) {
+            log.push_back(arg.entries[i]);
+            i++;
+        };
+        // If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
+        if (arg.leaderCommit > commitIndex) {
+            commitIndex = std::min(arg.leaderCommit, (int) log.size() - 1);
+        }
+        reply.term = current_term;
+        reply.success = true;
     }
     return raft_rpc_status::OK;
 }
@@ -368,6 +397,30 @@ template<typename state_machine, typename command>
 void raft<state_machine, command>::handle_append_entries_reply(int node, const append_entries_args<command> &arg,
                                                                const append_entries_reply &reply) {
     // Lab3: Your code here
+    std::unique_lock <std::mutex> lock(mtx);
+
+    election_timer = get_current_time();
+
+    if (reply.term > current_term) {
+        // convert to follower
+        current_term = reply.term;
+        convert_follower();
+    } else if (reply.success) {
+        // append entries successfully
+        // update matchIndex[target]
+        matchIndex[node] = std::max(matchIndex[node], (int) arg.entries.size() - 1);
+        // update commitIndex, which means we should commit until this log
+        std::vector<int> tmp = matchIndex;
+        sort(tmp.begin(), tmp.end());
+        // 升序 (size + 1) / 2  (4:2, 5:3) 这里是第几个，id需要-1
+        commitIndex = std::max(commitIndex, tmp[(tmp.size() + 1) / 2 - 1]);
+        RAFT_LOG("handle_append_entries_reply(success) my_id: %d, id: %d, commitIndex: %d", my_id, target, commitIndex);
+    } else {
+        // append entries fails
+        // we simply transfer all the logs here
+        nextIndex[node] = 1;
+        RAFT_LOG("handle_append_entries_reply(fail) my_id: %d, id: %d, commitIndex: %d", my_id, target, commitIndex);
+    }
     return;
 }
 
@@ -422,7 +475,7 @@ void raft<state_machine, command>::send_install_snapshot(int target, install_sna
 
 template<typename state_machine, typename command>
 void raft<state_machine, command>::run_background_election() {
-    // Periodly check the liveness of the leader.
+    // periodically check the liveness of the leader.
 
     // Work for followers and candidates.
 
@@ -461,44 +514,58 @@ void raft<state_machine, command>::run_background_election() {
 
 template<typename state_machine, typename command>
 void raft<state_machine, command>::run_background_commit() {
-    // Periodly send logs to the follower.
+    // periodically send logs to the follower.
 
     // Only work for the leader.
-
-    /*
-        while (true) {
-            if (is_stopped()) return;
-            // Lab3: Your code here
-        }    
-        */
-
-    return;
+    while (true) {
+        if (is_stopped()) return;
+        // Lab3: Your code here
+        if (is_leader(current_term)) {
+            matchIndex[my_id] = log.size() - 1;
+            for (int i = 0; i < num_nodes(); i++) {
+                // there are new logs to append
+                if (i != my_id && (int) log.size() > nextIndex[i]) {
+                    // send args, specially if nextIndex[i] == 1, then send log[0] and term of it is 0
+                    append_entries_args<command> arg(current_term, my_id, nextIndex[i] - 1,
+                                                     log[nextIndex[i] - 1].term, log, commitIndex);
+                    thread_pool->addObjJob(this, &raft::send_append_entries, i, arg);
+                };
+            };
+            RAFT_LOG("run_background_commit  my_id: %d, CommitIndex: %d", my_id, commitIndex);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    }
 }
 
 template<typename state_machine, typename command>
 void raft<state_machine, command>::run_background_apply() {
-    // Periodly apply committed logs the state machine
+    // periodically apply committed logs the state machine
 
     // Work for all the nodes.
 
-    /*
     while (true) {
         if (is_stopped()) return;
         // Lab3: Your code here:
-    }    
-    */
-    return;
+        if (commitIndex > lastApplied) {
+            RAFT_LOG("my_id: %d, role: %d, commitIndex: %d, lastApplied: %d", my_id, role, commitIndex, lastApplied);
+            for (int i = lastApplied + 1; i <= commitIndex; i++) {
+                state->apply_log(log[i].cmd);
+            };
+            lastApplied = commitIndex;
+        };
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
 }
 
 template<typename state_machine, typename command>
 void raft<state_machine, command>::run_background_ping() {
-    // Periodly send empty append_entries RPC to the followers.
+    // periodically send empty append_entries RPC to the followers.
 
     // Only work for the leader.
     while (true) {
         if (is_stopped()) return;
         // Lab3: Your code here:
-        if (role == leader) {
+        if (is_leader(current_term)) {
             for (int i = 0; i < num_nodes(); i++)
                 if (i != my_id) {
                     append_entries_args<command> args(current_term, my_id); // heartbeat;
@@ -548,8 +615,9 @@ template<typename state_machine, typename command>
 void raft<state_machine, command>::convert_leader() {
     RAFT_LOG("convert_leader my_id: %d, term: %d, role: %d", my_id, current_term, role);
     role = leader;
-//  nextIndex.assign(num_nodes(), log.size());
-//  matchIndex.assign(num_nodes(), 0);
+    nextIndex.assign(num_nodes(), log.size());
+    matchIndex.assign(num_nodes(), 0);
+    matchIndex[my_id] = log.size() - 1;
 }
 
 
