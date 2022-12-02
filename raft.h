@@ -29,6 +29,7 @@ class raft {
 
     friend class thread_pool;
 
+//#define DEBUG
 #define TEST
 #ifdef TEST
 #define RAFT_LOG(fmt, args...) \
@@ -307,7 +308,7 @@ int raft<state_machine, command>::request_vote(request_vote_args args, request_v
     } else {
         if (current_term < args.term) {
             current_term = args.term;
-            if (role != follower) convert_follower();
+            convert_follower();
         }
         if ((voteFor == -1 || voteFor == args.candidateId)
             && (log.back().term < args.term ||
@@ -414,12 +415,12 @@ void raft<state_machine, command>::handle_append_entries_reply(int node, const a
         sort(tmp.begin(), tmp.end());
         // 升序 (size + 1) / 2  (4:2, 5:3) 这里是第几个，id需要-1
         commitIndex = std::max(commitIndex, tmp[(tmp.size() + 1) / 2 - 1]);
-        RAFT_LOG("handle_append_entries_reply(success) my_id: %d, id: %d, commitIndex: %d", my_id, target, commitIndex);
+        RAFT_LOG("handle_append_entries_reply(success) my_id: %d, id: %d, commitIndex: %d", my_id, node, commitIndex);
     } else {
         // append entries fails
         // we simply transfer all the logs here
         nextIndex[node] = 1;
-        RAFT_LOG("handle_append_entries_reply(fail) my_id: %d, id: %d, commitIndex: %d", my_id, target, commitIndex);
+        RAFT_LOG("handle_append_entries_reply(fail) my_id: %d, id: %d, commitIndex: %d", my_id, node, commitIndex);
     }
     return;
 }
@@ -527,7 +528,8 @@ void raft<state_machine, command>::run_background_commit() {
                 if (i != my_id && (int) log.size() > nextIndex[i]) {
                     // send args, specially if nextIndex[i] == 1, then send log[0] and term of it is 0
                     append_entries_args<command> arg(current_term, my_id, nextIndex[i] - 1,
-                                                     log[nextIndex[i] - 1].term, log, commitIndex);
+                                                     log[nextIndex[i] - 1].term,
+                                                     log, commitIndex);
                     thread_pool->addObjJob(this, &raft::send_append_entries, i, arg);
                 };
             };
