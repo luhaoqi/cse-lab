@@ -415,7 +415,8 @@ void raft<state_machine, command>::handle_append_entries_reply(int node, const a
         sort(tmp.begin(), tmp.end());
         // 升序 (size + 1) / 2  (4:2, 5:3) 这里是第几个，id需要-1
         commitIndex = std::max(commitIndex, tmp[(tmp.size() + 1) / 2 - 1]);
-        RAFT_LOG("handle_append_entries_reply(success) my_id: %d, id: %d, commitIndex: %d", my_id, node, commitIndex)
+        if (!arg.entries.empty())
+            RAFT_LOG("handle_append_entries_reply(success) my_id: %d, id: %d, commitIndex: %d", my_id, node, commitIndex)
     } else {
         // append entries fails
         // we simply transfer all the logs here
@@ -490,7 +491,7 @@ void raft<state_machine, command>::run_background_election() {
         long long current_time = get_current_time();
         if (role == follower) {
             // rules for follower
-            int timeout_election = get_random(150, 300);
+            int timeout_election = get_random(300, 500);
             if (current_time - election_timer > timeout_election) {
                 convert_candidate();
             }
@@ -501,7 +502,8 @@ void raft<state_machine, command>::run_background_election() {
                 convert_leader();
             } else {
                 // election timeout elapses: start new election
-                if (current_time - election_timer > 1000) {
+                int timeout_election = get_random(900, 1100);
+                if (current_time - election_timer > timeout_election) {
                     convert_candidate();
                 }
             }
@@ -567,6 +569,7 @@ void raft<state_machine, command>::run_background_ping() {
         if (is_stopped()) return;
         // Lab3: Your code here:
         if (is_leader(current_term)) {
+            RAFT_LOG("send heartbeat my_id=%d num=%d",my_id,num_nodes())
             for (int i = 0; i < num_nodes(); i++)
                 if (i != my_id) {
                     append_entries_args<command> args(current_term, my_id); // heartbeat;
@@ -594,12 +597,12 @@ void raft<state_machine, command>::convert_follower() {
 
 template<typename state_machine, typename command>
 void raft<state_machine, command>::convert_candidate() {
-    RAFT_LOG("convert_candidate my_id: %d, term: %d, role: %d", my_id, current_term, role)
     role = candidate;
     // start election
     current_term++;
     voteFor = my_id;
     election_timer = get_current_time();
+    RAFT_LOG("convert_candidate my_id: %d, term: %d, role: %d", my_id, current_term, role)
     // assign all persistVote to false
     persistVote.assign(num_nodes(), false);
     persistVote[my_id] = true;
