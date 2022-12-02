@@ -93,7 +93,9 @@ public:
     append_entries_args() {}
 
     // use for heartbeat
-    append_entries_args(int term, int id) : term(term), leaderId(id), entries(std::vector<log_entry<command>>()) {};
+    append_entries_args(int term, int id, int commitIndex) : term(term), leaderId(id),
+                                                             entries(std::vector<log_entry<command>>()),
+                                                             leaderCommit(commitIndex) {};
 
     append_entries_args(int term, int leaderId, int prevLogIndex, int prevLogTerm,
                         std::vector <log_entry<command>> entries, int leaderCommit)
