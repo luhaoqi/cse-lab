@@ -320,8 +320,8 @@ int raft<state_machine, command>::request_vote(request_vote_args args, request_v
     } else {
         bool change = false;
         if (current_term < args.term) {
-            current_term = args.term;
             convert_follower();
+            current_term = args.term;
             change = true;
         }
         if ((voteFor == -1 || voteFor == args.candidateId)
@@ -376,6 +376,7 @@ int raft<state_machine, command>::append_entries(append_entries_args<command> ar
     }
     if (arg.term > current_term) {
         current_term = arg.term;
+        convert_follower();
         storage->store_metadata(current_term, voteFor);
     }
     election_timer = get_current_time();
@@ -386,7 +387,8 @@ int raft<state_machine, command>::append_entries(append_entries_args<command> ar
         if (arg.leaderCommit > commitIndex) {
             commitIndex = std::min(arg.leaderCommit, (int) log.size() - 1);
         }
-        RAFT_LOG("node %d get heartbeat from %d my_commitIndex: %d", my_id, arg.leaderId, commitIndex)
+        RAFT_LOG("node %d get heartbeat from %d my_commitIndex: %d term[reply:%d, leader:%d]", my_id, arg.leaderId,
+                 commitIndex, reply.term, arg.term);
     } else {
         // true append entries RPC
 
@@ -416,6 +418,7 @@ int raft<state_machine, command>::append_entries(append_entries_args<command> ar
             commitIndex = std::min(arg.leaderCommit, (int) log.size() - 1);
         }
         reply.success = true;
+        RAFT_LOG("node:%d append entries from %d term[my:%d, leader:%d]", my_id, arg.leaderId, reply.term, arg.term);
     }
     return raft_rpc_status::OK;
 }
@@ -476,6 +479,7 @@ void raft<state_machine, command>::handle_install_snapshot_reply(int node, const
 
 template<typename state_machine, typename command>
 void raft<state_machine, command>::send_request_vote(int target, request_vote_args arg) {
+    RAFT_LOG("send_request_vote my_id:%d, target:%d", my_id, target)
     request_vote_reply reply;
     if (rpc_clients[target]->call(raft_rpc_opcodes::op_request_vote, arg, reply) == 0) {
         handle_request_vote_reply(target, arg, reply);
