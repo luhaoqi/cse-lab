@@ -403,6 +403,8 @@ int raft<state_machine, command>::append_entries(append_entries_args<command> ar
             if (arg.entries[i].term != log[i].term) break;
         }
         // pop logs until index is i (i also pop)
+        // 这里pop需要记录log吗？ 加入被leader更新后crash 之前pop掉的又回来了？
+        // 但貌似之前不能凭借这些log成为leader就算恢复也不怕，可以重新覆盖？
         while (log.size() > i)
             log.pop_back();
         // Append any new entries not already in the log

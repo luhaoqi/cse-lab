@@ -52,9 +52,10 @@ void chfs_command_raft::serialize(char *buf_out, int size) const {
             *(reinterpret_cast<extent_protocol::extentid_t *>(buf_out)) = id;
             buf_out += sizeof(id);
             int sz = (int) buf.size();
-            *(reinterpret_cast<int *>(buf_out)) = id;
+            *(reinterpret_cast<int *>(buf_out)) = sz;
             buf_out += sizeof(int);
             memcpy(buf_out, buf.c_str(), sz);
+//            printf("serialize PUT totsize=%d size=%d\n",size, sz);
             return;
         }
         case CMD_GET:
@@ -85,6 +86,7 @@ void chfs_command_raft::deserialize(const char *buf_in, int size) {
             id = *(reinterpret_cast<extent_protocol::extentid_t *>(in));
             in += sizeof(id);
             int sz = *(reinterpret_cast<int *>(in));
+//            printf("deserialize PUT totsize=%d size=%d\n",size, sz);
             in += sizeof(int);
             buf = std::string(in, sz);
             return;
