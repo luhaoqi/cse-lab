@@ -40,6 +40,7 @@ class block_manager
 private:
   disk *d;
   std::map<uint32_t, int> using_blocks;
+  blockid_t last;
 
 public:
   block_manager();
@@ -89,6 +90,7 @@ class inode_manager
 {
 private:
   block_manager *bm;
+  int now_alloc_inode_num;
   struct inode *get_inode(uint32_t inum);
   void put_inode(uint32_t inum, struct inode *ino);
   blockid_t get_nth_block(inode_t *ino, uint32_t n);

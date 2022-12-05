@@ -24,7 +24,8 @@ blockid_t block_manager::alloc_block() {
    * note: you should mark the corresponding bit in block bitmap when alloc.
    * you need to think about which block you can start to be allocated.
    */
-  static blockid_t last = IBLOCK(INODE_NUM, sb.nblocks);
+  // this will cause bug, see inode manager' alloc function (the inum variable)
+  // static blockid_t last = IBLOCK(INODE_NUM, sb.nblocks);
   blockid_t begin = IBLOCK(INODE_NUM, sb.nblocks) + 1;
   for (blockid_t i = last + 1; i < BLOCK_NUM; i++) {
     if (!using_blocks[i]) {
@@ -58,7 +59,7 @@ void block_manager::free_block(uint32_t id) {
 // |<-sb->|<-free block bitmap->|<-inode table->|<-data->|
 block_manager::block_manager() {
   d = new disk();
-
+  last = IBLOCK(INODE_NUM, sb.nblocks);
   // format the disk
   sb.size = BLOCK_SIZE * BLOCK_NUM;
   sb.nblocks = BLOCK_NUM;
@@ -77,6 +78,7 @@ void block_manager::write_block(uint32_t id, const char *buf) {
 
 inode_manager::inode_manager() {
   bm = new block_manager();
+  now_alloc_inode_num = 0;
   uint32_t root_dir = alloc_inode(extent_protocol::T_DIR);
   if (root_dir != 1) {
     printf("\tim: error! alloc first inode %d, should be 1\n", root_dir);
@@ -92,10 +94,11 @@ uint32_t inode_manager::alloc_inode(uint32_t type) {
    * note: the normal inode block should begin from the 2nd inode block.
    * the 1st is used for root_dir, see inode_manager::inode_manager().
    */
-  static int inum = 0;
+  // this will cause bug if new tow inode manager , which the second's root_dir will alloc inode 2
+  // static int inum = 0;
   for (int i = 0; i < INODE_NUM; i++) {
-    inum = inum % INODE_NUM + 1;
-    inode_t *ino = get_inode(inum);
+      now_alloc_inode_num = now_alloc_inode_num % INODE_NUM + 1;
+    inode_t *ino = get_inode(now_alloc_inode_num);
     if (!ino) {
       ino = new inode_t;
       bzero(ino, sizeof(inode_t));
@@ -104,13 +107,13 @@ uint32_t inode_manager::alloc_inode(uint32_t type) {
       ino->atime = (unsigned int)time(NULL);
       ino->ctime = (unsigned int)time(NULL);
       ino->mtime = (unsigned int)time(NULL);
-      put_inode(inum, ino);
+      put_inode(now_alloc_inode_num, ino);
       free(ino);
       break;
     }
     free(ino);
   }
-  return inum;
+  return now_alloc_inode_num;
 }
 
 void inode_manager::free_inode(uint32_t inum) {
@@ -227,15 +230,15 @@ void inode_manager::write_file(uint32_t inum, const char *buf, int size) {
    * you need to consider the situation when the size of buf
    * is larger or smaller than the size of original inode
    */
-  printf("\tim(wrirte_fild): write %d bytes to inode %d\n", size, inum);
+  printf("\tim(write_file): write %d bytes to inode %d\n", size, inum);
   if (size < 0 || (uint64_t)size > MAXFILE * BLOCK_SIZE) {
-    printf("\tim(wrirte_fild): size is out of range[0,%ld]\n",
+    printf("\tim(write_file): size is out of range[0,%ld]\n",
            MAXFILE * BLOCK_SIZE);
     return;
   }
   inode_t *ino = get_inode(inum);
   if (ino == NULL) {
-    printf("\tim(wrirte_fild): inode %d doesn't exist!\n", inum);
+    printf("\tim(write_file): inode %d doesn't exist!\n", inum);
     return;
   }
 

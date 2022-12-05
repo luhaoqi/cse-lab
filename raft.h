@@ -30,8 +30,8 @@ class raft {
 
     friend class thread_pool;
 
-//#define DEBUG
-#define TEST
+#define DEBUG
+//#define TEST
 #ifdef TEST
 #define RAFT_LOG(fmt, args...) \
     do {                       \
@@ -112,13 +112,13 @@ private:
     std::set<int> persistVote;          //persist all votes from other clients
 
     /* ---- Volatile state on all server----  */
-    int commitIndex;    //index of highest log entry known to be committed (initialized to 0, increases monotonically)
-    int lastApplied;    //index of highest log entry applied to state machine
+    int commitIndex;    //index of the highest log entry known to be committed (initialized to 0, increases monotonically)
+    int lastApplied;    //index of the highest log entry applied to state machine
     long long election_timer;  // use to check timeout in election
 
     /* ---- Volatile state on leader----  */
     std::vector<int> nextIndex; // for each server, index of the next log entry to send to that server (initialized to leader last log index + 1)
-    std::vector<int> matchIndex; // for each server, index of highest log entry known to be replicated on server
+    std::vector<int> matchIndex; // for each server, index of the highest log entry known to be replicated on server
 
 
 private:
@@ -388,7 +388,7 @@ int raft<state_machine, command>::append_entries(append_entries_args<command> ar
             commitIndex = std::min(arg.leaderCommit, (int) log.size() - 1);
         }
         RAFT_LOG("node %d get heartbeat from %d my_commitIndex: %d term[reply:%d, leader:%d]", my_id, arg.leaderId,
-                 commitIndex, reply.term, arg.term);
+                 commitIndex, reply.term, arg.term)
     } else {
         // true append entries RPC
 
@@ -418,7 +418,7 @@ int raft<state_machine, command>::append_entries(append_entries_args<command> ar
             commitIndex = std::min(arg.leaderCommit, (int) log.size() - 1);
         }
         reply.success = true;
-        RAFT_LOG("node:%d append entries from %d term[my:%d, leader:%d]", my_id, arg.leaderId, reply.term, arg.term);
+        RAFT_LOG("node:%d append entries from %d term[my:%d, leader:%d]", my_id, arg.leaderId, reply.term, arg.term)
     }
     return raft_rpc_status::OK;
 }
@@ -522,27 +522,31 @@ void raft<state_machine, command>::run_background_election() {
 
     RAFT_LOG("my_id: %d, term: %d, role: %d", my_id, current_term, role)
     while (true) {
-        if (is_stopped()) return;
-        // Lab3: Your code here
+        {
+            std::unique_lock <std::mutex> lock(mtx);
+            if (is_stopped()) return;
+            // Lab3: Your code here
+
+            // get current time
+            long long current_time = get_current_time();
+            if (role == follower) {
+                // rules for follower
+                int timeout_election = get_random(300, 500);
+                if (current_time - election_timer > timeout_election) {
+                    convert_candidate();
+                }
+            } else if (role == candidate) {
+                // election timeout elapses: start new election
+                int timeout_election = get_random(800, 1000);
+                if (current_time - election_timer > timeout_election) {
+                    convert_follower();
+                }
+            } else if (role == leader) {
+//            break;
+            }
+        }
         // sleep to avoid busy waiting
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
-        // get current time
-        long long current_time = get_current_time();
-        if (role == follower) {
-            // rules for follower
-            int timeout_election = get_random(300, 500);
-            if (current_time - election_timer > timeout_election) {
-                convert_candidate();
-            }
-        } else if (role == candidate) {
-            // election timeout elapses: start new election
-            int timeout_election = get_random(800, 1000);
-            if (current_time - election_timer > timeout_election) {
-                convert_follower();
-            }
-        } else if (role == leader) {
-//            break;
-        }
     }
 }
 
@@ -552,22 +556,25 @@ void raft<state_machine, command>::run_background_commit() {
 
     // Only work for the leader.
     while (true) {
-        if (is_stopped()) return;
-        // Lab3: Your code here
-        if (is_leader(current_term)) {
-            matchIndex[my_id] = log.size() - 1;
-            for (int i = 0; i < num_nodes(); i++) {
-                // there are new logs to append
-                if (i != my_id && (int) log.size() > nextIndex[i]) {
-                    // send args, specially if nextIndex[i] == 1, then send log[0] and term of it is 0
-                    append_entries_args<command> arg(current_term, my_id, nextIndex[i] - 1,
-                                                     log[nextIndex[i] - 1].term,
-                                                     log, commitIndex);
-                    thread_pool->addObjJob(this, &raft::send_append_entries, i, arg);
-                    RAFT_LOG(
-                            "run_background_commit  my_id: %d, my_log_max_id:%d, node=%d, nextIndex[node]: %d, CommitIndex: %d",
-                            my_id, (int) log.size() - 1,
-                            i, nextIndex[i], commitIndex)
+        {
+            std::unique_lock <std::mutex> lock(mtx);
+            if (is_stopped()) return;
+            // Lab3: Your code here
+            if (is_leader(current_term)) {
+                matchIndex[my_id] = log.size() - 1;
+                for (int i = 0; i < num_nodes(); i++) {
+                    // there are new logs to append
+                    if (i != my_id && (int) log.size() > nextIndex[i]) {
+                        // send args, specially if nextIndex[i] == 1, then send log[0] and term of it is 0
+                        append_entries_args<command> arg(current_term, my_id, nextIndex[i] - 1,
+                                                         log[nextIndex[i] - 1].term,
+                                                         log, commitIndex);
+                        thread_pool->addObjJob(this, &raft::send_append_entries, i, arg);
+                        RAFT_LOG(
+                                "run_background_commit  my_id: %d, my_log_max_id:%d, node=%d, nextIndex[node]: %d, CommitIndex: %d",
+                                my_id, (int) log.size() - 1,
+                                i, nextIndex[i], commitIndex)
+                    }
                 }
             }
         }
@@ -582,15 +589,18 @@ void raft<state_machine, command>::run_background_apply() {
     // Work for all the nodes.
 
     while (true) {
-        if (is_stopped()) return;
-        // Lab3: Your code here:
-        if (commitIndex > lastApplied) {
-            RAFT_LOG("run_background_apply my_id: %d, role: %d, commitIndex: %d, lastApplied: %d", my_id, role,
-                     commitIndex, lastApplied)
-            for (int i = lastApplied + 1; i <= commitIndex; i++) {
-                state->apply_log(log[i].cmd);
+        {
+            std::unique_lock <std::mutex> lock(mtx);
+            if (is_stopped()) return;
+            // Lab3: Your code here:
+            if (commitIndex > lastApplied) {
+                RAFT_LOG("run_background_apply my_id: %d, role: %d, commitIndex: %d, lastApplied: %d", my_id, role,
+                         commitIndex, lastApplied)
+                for (int i = lastApplied + 1; i <= commitIndex; i++) {
+                    state->apply_log(log[i].cmd);
+                }
+                lastApplied = commitIndex;
             }
-            lastApplied = commitIndex;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
@@ -602,15 +612,18 @@ void raft<state_machine, command>::run_background_ping() {
 
     // Only work for the leader.
     while (true) {
-        if (is_stopped()) return;
-        // Lab3: Your code here:
-        if (is_leader(current_term)) {
-            RAFT_LOG("send heartbeat my_id=%d num=%d", my_id, num_nodes())
-            for (int i = 0; i < num_nodes(); i++)
-                if (i != my_id) {
-                    append_entries_args<command> args(current_term, my_id, commitIndex); // heartbeat;
-                    thread_pool->addObjJob(this, &raft::send_append_entries, i, args);
-                }
+        {
+            std::unique_lock <std::mutex> lock(mtx);
+            if (is_stopped()) return;
+            // Lab3: Your code here:
+            if (is_leader(current_term)) {
+                RAFT_LOG("send heartbeat my_id=%d num=%d", my_id, num_nodes())
+                for (int i = 0; i < num_nodes(); i++)
+                    if (i != my_id) {
+                        append_entries_args<command> args(current_term, my_id, commitIndex); // heartbeat;
+                        thread_pool->addObjJob(this, &raft::send_append_entries, i, args);
+                    }
+            }
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(150));
     }
