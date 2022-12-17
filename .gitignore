@@ -7,3 +7,4 @@ log/
 *.log
 .clang-format
 raft_temp/
+core

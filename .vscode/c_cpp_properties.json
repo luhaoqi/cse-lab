@@ -4,7 +4,8 @@
             "name": "Win32",
             "includePath": [
                 "${default}",
-                "/rpc"
+                "${workspaceFolder}/rpc",
+                "${workspaceFolder}/lang"
             ],
             "defines": [
                 "_DEBUG",
@@ -12,7 +13,7 @@
                 "_UNICODE"
             ],
             "windowsSdkVersion": "10.0.19041.0",
-            "compilerPath": "D:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.31.31103/bin/Hostx64/x64/cl.exe",
+            "compilerPath": "/usr/bin/gcc",
             "cStandard": "c17",
             "cppStandard": "c++17",
             "intelliSenseMode": "windows-msvc-x64",
