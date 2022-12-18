@@ -27,10 +27,23 @@ public:
 
 	struct AskTaskResponse {
 		// Lab4: Your definition here.
+        int task_type;
+        int index;  // id of task
+        int num;    // reducer need to know how many files need to process
+        string filename;
 	};
+
+    friend marshall &operator<<(marshall &m, const AskTaskResponse &res) {
+        return m << res.task_type << res.filename << res.index << res.num;
+    }
+
+    friend unmarshall &operator>>(unmarshall &u, AskTaskResponse &res) {
+        return u >> res.task_type >> res.filename >> res.index >> res.num;
+    }
 
 	struct AskTaskRequest {
 		// Lab4: Your definition here.
+        int id; //
 	};
 
 	struct SubmitTaskResponse {

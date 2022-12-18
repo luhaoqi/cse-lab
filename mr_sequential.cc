@@ -41,6 +41,11 @@ vector <KeyVal> Map(const string &filename, const string &content) {
             }
         }
     }
+    // 如果最后有一个word
+    if (word.length() > 0) {
+        cnt[word]++;
+        word = "";
+    }
     vector <KeyVal> vec;
     for (auto &t: cnt) {
         vec.push_back(KeyVal{t.first, to_string(t.second)});
